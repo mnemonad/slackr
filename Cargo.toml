@@ -2,6 +2,10 @@
 name = "slackr"
 version = "0.0.1"
 edition = "2021"
+description = "Rust library or managing Slack API."
+repository = "https://github.com/mnemonad/slackr"
+readme = "README.md"
+license = "Apache-2.0"
 
 [dependencies]
 dotenv = "0.15.0"
