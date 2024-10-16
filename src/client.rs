@@ -1,10 +1,12 @@
 use serde::Deserialize;
 use serde_json::json;
-use reqwest::{ Client, Response, header::AUTHORIZATION };
+use reqwest::{ Client, header::AUTHORIZATION };
 use tokio::net::TcpStream;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream, tungstenite::Message };
 use futures_util::stream::{ SplitSink, SplitStream, StreamExt };
 use futures_util::SinkExt;
+use futures::future::BoxFuture;
+use crate::event_handler::EventHandler;
 
 fn get_oauth_token() -> String {
     std::env::var("SLACK_OAUTH_TOKEN").expect("ENV ERROR: SLACK_OAUTH_TOKEN")
@@ -19,28 +21,28 @@ struct AppSocketReponse {
 
 /// Parse WebSocket Slack Message Envelope
 #[derive(Debug, Deserialize)]
-struct SlackEnvelope {
+pub struct SlackEnvelope {
     envelope_id: String,
     #[serde(rename="type")]
     message_type: String,
-    payload: SlackPayload
+    pub payload: SlackPayload
 }
 
 /// Slack Message Payload
 #[derive(Debug, Deserialize)]
-struct SlackPayload {
-    event: Event,
+pub struct SlackPayload {
+    pub event: Event,
     event_id: String
 }
 
 /// Slack Event - Message contents
 #[derive(Debug, Deserialize)]
-struct Event {
+pub struct Event {
     #[serde(rename="type")]
-    event_type: String,
-    user: String,
-    text: String,
-    channel: String
+    pub(crate) event_type: String,
+    pub user: String,
+    pub text: String,
+    pub channel: String
 }
 
 /// Slack user list response
@@ -84,10 +86,11 @@ struct SlackClientStream {
     reader: WSReader
 } 
 
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct SlackClient {
     client: Client,
-    stream: Option<SlackClientStream>
+    stream: Option<SlackClientStream>,
+    event_handler: EventHandler
 }
 
 const SLACK_URL: &str = "https://slack.com/api/";
@@ -96,7 +99,8 @@ impl SlackClient {
     pub fn new() -> Self {
         Self {
             client: Client::new(),
-            stream: None 
+            stream: None,
+            event_handler: EventHandler::new()
         }
     }
 
@@ -136,7 +140,14 @@ impl SlackClient {
         Ok(())
     }
 
-    async fn ack(&mut self, envelope: SlackEnvelope) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn register_callback<F>(&mut self, event_type: &str, callback: F)
+        where
+            F: Fn(SlackEnvelope) -> BoxFuture<'static, ()> + 'static
+    {
+        self.event_handler.register_callback(event_type, callback);
+    }
+
+    async fn ack(&mut self, envelope: &SlackEnvelope) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(ref mut stream) = self.stream {
             let ack = json!({
                 "envelope_id": envelope.envelope_id,
@@ -162,9 +173,10 @@ impl SlackClient {
                 Some(Ok(msg)) => {
                     if let Ok(text) = msg.to_text() {
                         if let Ok(parsed) = serde_json::from_str::<SlackEnvelope>(text) {
-                            dbg!(&parsed);
 
-                            self.ack(parsed).await?
+                            self.ack(&parsed).await?;
+                            self.event_handler.handle_event(parsed).await;
+
                         }
                     }
                 },
@@ -194,7 +206,7 @@ impl SlackClient {
         Ok(response.channels)
     }
 
-    pub async fn test_endpoin(&self, endpoint: &str) {
+    pub async fn test_endpoint(&self, endpoint: &str) {
         todo!()
     }
 
