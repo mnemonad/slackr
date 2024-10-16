@@ -1,8 +1,8 @@
 [package]
 name = "slackr"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
-description = "Rust library or managing Slack API."
+description = "Rust library for managing Slack API."
 repository = "https://github.com/mnemonad/slackr"
 readme = "README.md"
 license = "Apache-2.0"
@@ -16,6 +16,7 @@ serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.128"
 tokio = { version = "1.40.0", features = ["full"] }
 tokio-tungstenite = { version = "0.24.0", features = ["native-tls"] }
+futures = "0.3.31"
 
 [[bin]]
 name = "test"
