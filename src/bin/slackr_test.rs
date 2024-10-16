@@ -2,7 +2,6 @@ use std::env;
 use std::path::Path;
 use slackr::client::{ SlackClient, SlackEnvelope };
 
-use futures_util::stream::StreamExt;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -12,9 +11,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut client = SlackClient::new();
 
-//    let _ = client.send_message("bot-testing", "test message").await?;
-
-    let _ = client.connect_to_socket(None).await;
+    client.connect_to_socket(None).await;
 
     client.register_callback("message", |event: SlackEnvelope| {
         Box::pin(async move {

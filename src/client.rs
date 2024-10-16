@@ -48,7 +48,7 @@ pub struct Event {
 /// Slack user list response
 #[derive(Debug, Deserialize)]
 struct SlackUsersResponse {
-    cache_ts: i64,
+    // cache_ts: i64,
     members: Vec<Member>
 }
 
@@ -68,6 +68,7 @@ struct SlackChannelsResponse {
     channels: Vec<Channel>
 }
 
+/// Slack Channel information
 #[derive(Debug, Deserialize)]
 pub struct Channel {
     #[serde(rename="id")]
@@ -86,16 +87,24 @@ struct SlackClientStream {
     reader: WSReader
 } 
 
-// #[derive(Debug)]
+/// SlackClient provides methods for both Socket and Web API.
+/// Only supports listening + ack over the Socket API.
+/// Various methods (more to come) provided for the Web API.
+/// Must provide APP token to the connect_to_socket method via literal or through an environment
+/// variable: SLACK_APP_TOKEN.
+/// For the Web API methods, the oauth token must be provided through an environment variable: SLACK_OAUTH_TOKEN.
 pub struct SlackClient {
     client: Client,
     stream: Option<SlackClientStream>,
     event_handler: EventHandler
 }
 
-const SLACK_URL: &str = "https://slack.com/api/";
+// const SLACK_URL: &str = "https://slack.com/api/";
 
 impl SlackClient {
+    ///```
+    ///let client = Client::new();
+    ///```
     pub fn new() -> Self {
         Self {
             client: Client::new(),
@@ -130,6 +139,9 @@ impl SlackClient {
         }
     }
 
+    ///```
+    ///client.connect_to_socket(None).await; // If None provided, .env is used
+    ///```
     pub async fn connect_to_socket(&mut self, api_token: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
         let websocket_url = self.get_socket_url(api_token).await?;
 
@@ -140,6 +152,15 @@ impl SlackClient {
         Ok(())
     }
 
+    /// ```
+    ///client.register_callback("message", |event: SlackEnvelope| {
+    ///    Box::pin(async move {
+    ///        let msg_event = &event.payload.event;
+    ///        println!("Received message: {:?} from {:?} in {:?}",
+    ///         msg_event.text, msg_event.user, msg_event.channel);
+    ///    })
+    ///});
+    ///```
     pub fn register_callback<F>(&mut self, event_type: &str, callback: F)
         where
             F: Fn(SlackEnvelope) -> BoxFuture<'static, ()> + 'static
@@ -206,9 +227,10 @@ impl SlackClient {
         Ok(response.channels)
     }
 
-    pub async fn test_endpoint(&self, endpoint: &str) {
+    /* pub async fn test_endpoint(&self, endpoint: &str) {
         todo!()
     }
+    */
 
     pub async fn send_message(&self, channel: &str, message: &str) -> Result<(), Box<dyn std::error::Error>> {
         let form = [("channel", channel), ("text", message)];

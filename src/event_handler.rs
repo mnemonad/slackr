@@ -4,6 +4,7 @@ use crate::client::{ SlackEnvelope };
 
 type Callback = Box<dyn Fn(SlackEnvelope) -> BoxFuture<'static, ()>>;
 
+/// EventHandler manages callbacks for the SlackClient
 pub struct EventHandler {
     callbacks: HashMap<String, Callback>
 }

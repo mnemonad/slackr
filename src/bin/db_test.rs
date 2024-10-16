@@ -12,11 +12,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv::from_path(dotenv_path).ok();
     let client = SlackClient::new();
 
-    let members = client.get_user_list().await?;
-    db.insert_members(members)?;
+    db.setup(&client).await?;
 
-    let channels = client.get_channel_list().await?;
-    db.insert_channels(channels)?;
+    let user = "U07DL8C7VSQ";
+    let channel = "C07R5Q3SGG1";
+
+    let real_name = db.get_real_name(user)?;
+    println!("{real_name}");
+    
+    let channel_name = db.get_channel_from_id(channel)?;
+    println!("{channel_name}");
 
     Ok(())
 }
