@@ -1,7 +1,7 @@
 use std::path::Path;
 use rusqlite::{ params, Connection, Result };
 
-use crate::client::{Channel, Member};
+use crate::client::{Channel, Member, SlackClient};
 
 pub struct Database {
     conn: Connection
@@ -18,6 +18,31 @@ impl Database {
         Ok(Database { conn })
     }
 
+    /// Pass SlackClient to method to insert/update user & channel aliases to initialized sqlite database.
+    pub async fn setup(&self, client: &SlackClient) -> Result<(), Box<dyn std::error::Error>> {
+        let members = client.get_user_list().await?;
+        self.insert_members(members)?;
+
+        let channels = client.get_channel_list().await?;
+        self.insert_channels(channels)?;
+
+        Ok(())
+    }
+
+    /// Get human-readable slack user name from id
+    pub fn get_real_name(&self, user_id: &str) -> Result<String> {
+        let mut stmt = self.conn.prepare("SELECT real_name FROM users WHERE id = ?1")?;
+        let real_name: String = stmt.query_row([user_id], |row| row.get(0))?;
+        Ok(real_name.to_string())
+    }
+
+    /// Get human-readable slack channel name from id
+    pub fn get_channel_from_id(&self, channel_id: &str) -> Result<String> {
+        let mut stmt = self.conn.prepare("SELECT name FROM channels WHERE id = ?1")?;
+        let channel_name: String = stmt.query_row([channel_id], |row| row.get(0))?;
+        Ok(channel_name.to_string())
+    }
+
     fn initialize_users_table(conn: &Connection) -> Result<()> {
         conn.execute(
             "
@@ -32,7 +57,7 @@ impl Database {
         )?;
 
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_users_name on users(name);",
+            "CREATE INDEX IF NOT EXISTS idx_users_name on users(id);",
             [],
         )?;
 
@@ -53,7 +78,7 @@ impl Database {
         )?;
 
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_channels_name on channels(name);",
+            "CREATE INDEX IF NOT EXISTS idx_channels_name on channels(id);",
             [],
         )?;
 
@@ -71,7 +96,7 @@ impl Database {
         Ok(())
     }
 
-    pub fn insert_members(&self, members: Vec<Member>) -> Result<()> {
+    fn insert_members(&self, members: Vec<Member>) -> Result<()> {
         for member in members.into_iter().filter(|m| !m.deleted) {
             self.insert_user(&member.user_id, &member.name, member.real_name.as_deref())?;
         }
@@ -89,10 +114,12 @@ impl Database {
         Ok(())
     }
 
-    pub fn insert_channels(&self, channels: Vec<Channel>) -> Result<()> {
+    fn insert_channels(&self, channels: Vec<Channel>) -> Result<()> {
         for channel in channels {
             self.insert_channel(&channel.channel_id, &channel.name, channel.is_private)?;
         }
         Ok(())
     }
+
+
 }
