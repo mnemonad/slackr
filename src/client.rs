@@ -1,3 +1,4 @@
+use std::future::Future;
 use serde::Deserialize;
 use serde_json::json;
 use reqwest::{ Client, header::AUTHORIZATION };
@@ -6,7 +7,8 @@ use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream, tungsten
 use futures_util::stream::{ SplitSink, SplitStream, StreamExt };
 use futures_util::SinkExt;
 use futures::future::BoxFuture;
-use crate::event_handler::EventHandler;
+use tokio_tungstenite::tungstenite::Error;
+use crate::event_handler::{EventHandler, Predicate };
 
 fn get_oauth_token() -> String {
     std::env::var("SLACK_OAUTH_TOKEN").expect("ENV ERROR: SLACK_OAUTH_TOKEN")
@@ -94,7 +96,7 @@ struct SlackClientStream {
 /// variable: SLACK_APP_TOKEN.
 /// For the Web API methods, the oauth token must be provided through an environment variable: SLACK_OAUTH_TOKEN.
 pub struct SlackClient {
-    client: Client,
+    pub client: Client,
     stream: Option<SlackClientStream>,
     event_handler: EventHandler
 }
@@ -161,11 +163,12 @@ impl SlackClient {
     ///    })
     ///});
     ///```
-    pub fn register_callback<F>(&mut self, event_type: &str, callback: F)
-        where
-            F: Fn(SlackEnvelope) -> BoxFuture<'static, ()> + 'static
+    pub fn register_callback<F, Fut>(&mut self, predicate: Predicate, callback: F)
+    where
+        F: Fn(&SlackEnvelope) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output=()> + Send + 'static
     {
-        self.event_handler.register_callback(event_type, callback);
+        self.event_handler.register_callback(predicate, callback);
     }
 
     async fn ack(&mut self, envelope: &SlackEnvelope) -> Result<(), Box<dyn std::error::Error>> {
@@ -185,26 +188,25 @@ impl SlackClient {
 
     pub async fn listen(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         loop {
-            let message = {
+            let incoming_event = {
                 let stream = self.stream.as_mut().ok_or("WSS is not connected")?;
                 stream.reader.next().await
             };
 
-            match message {
-                Some(Ok(msg)) => {
-                    if let Ok(text) = msg.to_text() {
-                        if let Ok(parsed) = serde_json::from_str::<SlackEnvelope>(text) {
-
-                            self.ack(&parsed).await?;
-                            self.event_handler.handle_event(parsed).await;
-
-                        }
+            match incoming_event {
+                Some(Ok(Message::Text(text))) => {
+                    if let Ok(envelope) = serde_json::from_str::<SlackEnvelope>(&text) {
+                        self.ack(&envelope).await?;
+                        self.event_handler.handle_event(&envelope).await;
                     }
                 },
-                Some(Err(e)) => eprintln!("ERROR: {}", e),
+                Some(Err(e)) => {
+                    eprintln!("Error: {:?}", e);
+                },
                 None => {
-                    eprintln!("Stream ended");
+                    eprintln!("Connection closed");
                 }
+                _ => {}
             }
         }
     }
@@ -241,7 +243,6 @@ impl SlackClient {
             .form(&form)
             .send().await.expect("Failed to send message");
 
-        dbg!(response.text().await?);
         Ok(())
     }
     
