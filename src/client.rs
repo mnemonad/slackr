@@ -6,8 +6,6 @@ use tokio::net::TcpStream;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream, tungstenite::Message };
 use futures_util::stream::{ SplitSink, SplitStream, StreamExt };
 use futures_util::SinkExt;
-use futures::future::BoxFuture;
-use tokio_tungstenite::tungstenite::Error;
 use crate::event_handler::{EventHandler, Predicate };
 
 fn get_oauth_token() -> String {
@@ -41,7 +39,7 @@ pub struct SlackPayload {
 #[derive(Debug, Deserialize)]
 pub struct Event {
     #[serde(rename="type")]
-    pub(crate) event_type: String,
+    pub event_type: String,
     pub user: String,
     pub text: String,
     pub channel: String
@@ -96,7 +94,7 @@ struct SlackClientStream {
 /// variable: SLACK_APP_TOKEN.
 /// For the Web API methods, the oauth token must be provided through an environment variable: SLACK_OAUTH_TOKEN.
 pub struct SlackClient {
-    pub client: Client,
+    client: Client,
     stream: Option<SlackClientStream>,
     event_handler: EventHandler
 }
@@ -155,13 +153,26 @@ impl SlackClient {
     }
 
     /// ```
-    ///client.register_callback("message", |event: SlackEnvelope| {
-    ///    Box::pin(async move {
-    ///        let msg_event = &event.payload.event;
-    ///        println!("Received message: {:?} from {:?} in {:?}",
-    ///         msg_event.text, msg_event.user, msg_event.channel);
-    ///    })
-    ///});
+    /// fn contains_no_spaces(event: &SlackEnvelope) -> bool {
+    ///     let msg = &event.payload.event.text.clone();
+    ///     !msg.contains(' ')
+    /// }
+    ///
+    /// client.register_callback(
+    ///     contains_no_spaces,
+    ///     move |event: &SlackEnvelope| {
+    ///         let message = event.payload.event.text.clone();
+    ///         let user = event.payload.event.user.clone();
+    ///         let channel = event.payload.event.channel.clone();
+    ///         let client = SlackClient::new();  // Unfortunate, but necessary for now
+    ///         async move {
+    ///             let echo_msg = format!("Received message: {:?} from {:?} in {:?}",
+    ///                 &message, &user, &channel);
+    ///
+    ///             let _ = client.send_message(&channel, &echo_msg).await;
+    ///         }
+    ///     }
+    /// );
     ///```
     pub fn register_callback<F, Fut>(&mut self, predicate: Predicate, callback: F)
     where

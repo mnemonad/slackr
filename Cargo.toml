@@ -6,6 +6,7 @@ description = "Rust library for managing Slack API."
 repository = "https://github.com/mnemonad/slackr"
 readme = "README.md"
 license = "Apache-2.0"
+exclude = ["src/bin/*"]
 
 [dependencies]
 dotenv = "0.15.0"
@@ -18,10 +19,13 @@ tokio = { version = "1.40.0", features = ["full"] }
 tokio-tungstenite = { version = "0.24.0", features = ["native-tls"] }
 futures = "0.3.31"
 
+
 [[bin]]
 name = "test"
 path = "src/bin/slackr_test.rs"
+publish = false
 
 [[bin]]
 name = "init_db"
 path = "src/bin/db_test.rs"
+publish = false

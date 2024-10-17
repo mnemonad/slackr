@@ -3,7 +3,7 @@ use slackr::alias_db::Database;
 use slackr::client::SlackClient;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dir = env!("CARGO_MANIFEST_DIR");
     let db_path = Path::new(dir).join("assets/alias_db.db");
     let db = Database::new(&db_path)?;

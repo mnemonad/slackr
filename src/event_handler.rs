@@ -3,9 +3,11 @@ use std::pin::Pin;
 use std::future::Future;
 use crate::client::{ SlackEnvelope };
 
+/// Predicate to determine if a callback should be executed
 pub type Predicate = fn(&SlackEnvelope) -> bool;
 
-type Callback = Box<dyn Fn(&SlackEnvelope) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
+/// Callback type for async event handling
+pub type Callback = Box<dyn Fn(&SlackEnvelope) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
 
 
 /// EventHandler manages callbacks for the SlackClient
