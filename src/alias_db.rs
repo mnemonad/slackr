@@ -3,6 +3,19 @@ use rusqlite::{ params, Connection, Result };
 
 use crate::client::{Channel, Member, SlackClient};
 
+/// SQLite database for storing user and channel aliases.
+/// ```
+/// #[tokio::main]
+/// pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let db_path = Path::new(dir).join("assets/alias_db.db");
+///     let db = Database::new(&db_path)?;
+///
+///     dotenv::dotenv().ok();
+///     let client = SlackClient::new();
+///
+///     db.setup(&client).await?;
+/// }
+/// ```
 pub struct Database {
     conn: Connection
 }
