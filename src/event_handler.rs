@@ -1,31 +1,45 @@
 use std::collections::HashMap;
-use futures::future::BoxFuture;
+use std::pin::Pin;
+use std::future::Future;
 use crate::client::{ SlackEnvelope };
 
-type Callback = Box<dyn Fn(SlackEnvelope) -> BoxFuture<'static, ()>>;
+/// Predicate to determine if a callback should be executed
+pub type Predicate = fn(&SlackEnvelope) -> bool;
+
+/// Callback type for async event handling
+pub type Callback = Box<dyn Fn(&SlackEnvelope) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
+
 
 /// EventHandler manages callbacks for the SlackClient
 pub struct EventHandler {
-    callbacks: HashMap<String, Callback>
+    callbacks: Vec<(Predicate, Callback)>
 }
 
 impl EventHandler {
     pub fn new() -> Self {
         Self {
-            callbacks: HashMap::new()
+            callbacks: Vec::new()
         }
     }
 
-    pub fn register_callback<F>(&mut self, event_type: &str, callback: F)
-        where
-            F: Fn(SlackEnvelope) -> BoxFuture<'static, ()> + 'static
+    pub fn register_callback<F, Fut>(&mut self, predicate: Predicate, callback: F)
+    where
+        F: Fn(&SlackEnvelope) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output=()> + Send + 'static
     {
-        self.callbacks.insert(event_type.to_owned(), Box::new(callback));
+        let async_callback: Callback = Box::new(
+            move |envelope: &SlackEnvelope| {
+                let fut = callback(envelope);
+                Box::pin(fut) as Pin<Box<dyn Future<Output=()> + Send>>
+            });
+        self.callbacks.push((predicate, async_callback));
     }
 
-    pub async fn handle_event(&self, envelope: SlackEnvelope) {
-        if let Some(callback) = self.callbacks.get(&envelope.payload.event.event_type) {
-            callback(envelope).await;
+    pub async fn handle_event(&self, envelope: &SlackEnvelope) {
+        for (predicate, callback) in &self.callbacks {
+            if predicate(envelope) {
+                callback(envelope).await;
+            }
         }
     }
 }
