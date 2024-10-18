@@ -94,7 +94,7 @@ struct SlackClientStream {
 /// variable: SLACK_APP_TOKEN.
 /// For the Web API methods, the oauth token must be provided through an environment variable: SLACK_OAUTH_TOKEN.
 pub struct SlackClient {
-    client: Client,
+    pub client: Client,
     stream: Option<SlackClientStream>,
     event_handler: EventHandler
 }
